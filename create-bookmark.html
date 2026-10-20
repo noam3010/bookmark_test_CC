@@ -244,6 +244,37 @@
             padding: 40px 20px;
             font-size: 14px;
         }
+
+        .category-group {
+            margin-bottom: 25px;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid;
+        }
+
+        .category-badge {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .category-title {
+            font-weight: 700;
+            font-size: 14px;
+            text-transform: capitalize;
+        }
+
+        .category-bookmarks {
+            display: grid;
+            gap: 12px;
+        }
     </style>
 </head>
 <body>
@@ -318,6 +349,16 @@
     <script>
         const STORAGE_KEY = 'bookmarks';
 
+        const CATEGORY_COLORS = {
+            work: '#3b82f6',
+            learning: '#8b5cf6',
+            entertainment: '#ec4899',
+            shopping: '#f59e0b',
+            social: '#06b6d4',
+            news: '#ef4444',
+            other: '#6b7280'
+        };
+
         const form = document.getElementById('bookmarkForm');
         const successMessage = document.getElementById('successMessage');
         const bookmarksList = document.getElementById('bookmarksList');
@@ -336,7 +377,7 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
         }
 
-        // Display bookmarks on the list tab
+        // Display bookmarks on the list tab grouped by category
         function displayBookmarks() {
             const bookmarks = loadBookmarks();
             bookmarkCount.textContent = bookmarks.length;
@@ -346,22 +387,49 @@
                 return;
             }
 
-            bookmarksList.innerHTML = bookmarks.map((bookmark, index) => `
-                <div class="bookmark-item">
-                    <div class="bookmark-info">
-                        <div class="bookmark-title">${escapeHtml(bookmark.title)}</div>
-                        <a href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener noreferrer" class="bookmark-url">
-                            ${escapeHtml(bookmark.url)}
-                        </a>
-                        <br>
-                        <span class="bookmark-category">${escapeHtml(bookmark.category)}</span>
+            // Group bookmarks by category
+            const grouped = {};
+            bookmarks.forEach((bookmark, index) => {
+                if (!grouped[bookmark.category]) {
+                    grouped[bookmark.category] = [];
+                }
+                grouped[bookmark.category].push({ ...bookmark, index });
+            });
+
+            // Display grouped bookmarks
+            let html = '';
+            Object.keys(grouped).sort().forEach(category => {
+                const color = CATEGORY_COLORS[category] || '#6b7280';
+                const categoryBookmarks = grouped[category];
+
+                html += `
+                    <div class="category-group">
+                        <div class="category-header" style="border-bottom-color: ${color}; color: ${color};">
+                            <span class="category-badge" style="background-color: ${color};"></span>
+                            <span class="category-title">${escapeHtml(category)}</span>
+                            <span style="margin-left: auto; font-size: 12px; font-weight: 600;">${categoryBookmarks.length}</span>
+                        </div>
+                        <div class="category-bookmarks">
+                            ${categoryBookmarks.map((item) => `
+                                <div class="bookmark-item" style="border-left: 4px solid ${color};">
+                                    <div class="bookmark-info">
+                                        <div class="bookmark-title">${escapeHtml(item.title)}</div>
+                                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="bookmark-url">
+                                            ${escapeHtml(item.url)}
+                                        </a>
+                                    </div>
+                                    <div class="bookmark-actions">
+                                        <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(item.url)}')">Open</button>
+                                        <button class="btn-small btn-delete" onclick="deleteBookmark(${item.index})">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
-                    <div class="bookmark-actions">
-                        <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(bookmark.url)}')">Open</button>
-                        <button class="btn-small btn-delete" onclick="deleteBookmark(${index})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            });
+
+            bookmarksList.innerHTML = html;
         }
 
         // Open bookmark in new tab
