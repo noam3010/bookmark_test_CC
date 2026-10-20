@@ -275,6 +275,35 @@
             display: grid;
             gap: 12px;
         }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-results-info {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #999;
+            padding: 30px 20px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -340,6 +369,15 @@
             <h1>📚 Saved Bookmarks</h1>
             <p class="subtitle">Your bookmarks are saved locally</p>
 
+            <div class="form-group">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="🔍 Search by title or URL..."
+                    class="search-input"
+                >
+            </div>
+
             <div id="bookmarksList" class="bookmarks-list">
                 <p class="empty-message">No bookmarks yet. Create one to get started!</p>
             </div>
@@ -365,6 +403,9 @@
         const bookmarkCount = document.getElementById('bookmarkCount');
         const tabButtons = document.querySelectorAll('.tab-button');
         const tabContents = document.querySelectorAll('.tab-content');
+        const searchInput = document.getElementById('searchInput');
+
+        let allBookmarks = [];
 
         // Load bookmarks from localStorage
         function loadBookmarks() {
@@ -377,23 +418,45 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
         }
 
-        // Display bookmarks on the list tab grouped by category
-        function displayBookmarks() {
-            const bookmarks = loadBookmarks();
-            bookmarkCount.textContent = bookmarks.length;
+        // Filter bookmarks based on search query
+        function filterBookmarks(searchQuery) {
+            if (!searchQuery.trim()) {
+                return allBookmarks;
+            }
 
-            if (bookmarks.length === 0) {
+            const query = searchQuery.toLowerCase();
+            return allBookmarks.filter(bookmark =>
+                bookmark.title.toLowerCase().includes(query) ||
+                bookmark.url.toLowerCase().includes(query)
+            );
+        }
+
+        // Display bookmarks on the list tab
+        function displayBookmarks(searchQuery = '') {
+            allBookmarks = loadBookmarks();
+            bookmarkCount.textContent = allBookmarks.length;
+
+            const bookmarksToDisplay = filterBookmarks(searchQuery);
+
+            if (allBookmarks.length === 0) {
                 bookmarksList.innerHTML = '<p class="empty-message">No bookmarks yet. Create one to get started!</p>';
+                return;
+            }
+
+            const bookmarksToDisplay = filterBookmarks(searchQuery);
+
+            if (bookmarksToDisplay.length === 0) {
+                bookmarksList.innerHTML = '<p class="no-results">No bookmarks match your search.</p>';
                 return;
             }
 
             // Group bookmarks by category
             const grouped = {};
-            bookmarks.forEach((bookmark, index) => {
+            bookmarksToDisplay.forEach((bookmark) => {
                 if (!grouped[bookmark.category]) {
                     grouped[bookmark.category] = [];
                 }
-                grouped[bookmark.category].push({ ...bookmark, index });
+                grouped[bookmark.category].push(bookmark);
             });
 
             // Display grouped bookmarks
@@ -410,20 +473,23 @@
                             <span style="margin-left: auto; font-size: 12px; font-weight: 600;">${categoryBookmarks.length}</span>
                         </div>
                         <div class="category-bookmarks">
-                            ${categoryBookmarks.map((item) => `
-                                <div class="bookmark-item" style="border-left: 4px solid ${color};">
-                                    <div class="bookmark-info">
-                                        <div class="bookmark-title">${escapeHtml(item.title)}</div>
-                                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="bookmark-url">
-                                            ${escapeHtml(item.url)}
-                                        </a>
+                            ${categoryBookmarks.map((bookmark) => {
+                                const index = allBookmarks.findIndex(b => b === bookmark);
+                                return `
+                                    <div class="bookmark-item" style="border-left: 4px solid ${color};">
+                                        <div class="bookmark-info">
+                                            <div class="bookmark-title">${escapeHtml(bookmark.title)}</div>
+                                            <a href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener noreferrer" class="bookmark-url">
+                                                ${escapeHtml(bookmark.url)}
+                                            </a>
+                                        </div>
+                                        <div class="bookmark-actions">
+                                            <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(bookmark.url)}')">Open</button>
+                                            <button class="btn-small btn-delete" onclick="deleteBookmark(${index})">Delete</button>
+                                        </div>
                                     </div>
-                                    <div class="bookmark-actions">
-                                        <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(item.url)}')">Open</button>
-                                        <button class="btn-small btn-delete" onclick="deleteBookmark(${item.index})">Delete</button>
-                                    </div>
-                                </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
@@ -459,6 +525,11 @@
             return text.replace(/[&<>"']/g, char => map[char]);
         }
 
+        // Search functionality
+        searchInput.addEventListener('input', (e) => {
+            displayBookmarks(e.target.value);
+        });
+
         // Tab switching
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
@@ -472,6 +543,7 @@
 
                 if (tabName === 'list') {
                     displayBookmarks();
+                    searchInput.value = '';
                 }
             });
         });
