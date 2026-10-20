@@ -266,10 +266,10 @@
                 <div class="form-group">
                     <label for="url">URL *</label>
                     <input
-                        type="url"
+                        type="text"
                         id="url"
                         name="url"
-                        placeholder="https://example.com"
+                        placeholder="example.com or https://example.com"
                         required
                         autofocus
                     >
@@ -408,12 +408,28 @@
             });
         });
 
+        // Normalize URL - add https:// if no protocol
+        function normalizeUrl(url) {
+            if (!url) return url;
+            if (!/^https?:\/\//.test(url)) {
+                return 'https://' + url;
+            }
+            return url;
+        }
+
         // Form submission
         form.addEventListener('submit', (e) => {
             e.preventDefault();
 
+            let urlValue = document.getElementById('url').value.trim();
+
+            if (!urlValue) {
+                alert('Please enter a URL');
+                return;
+            }
+
             const newBookmark = {
-                url: document.getElementById('url').value,
+                url: normalizeUrl(urlValue),
                 title: document.getElementById('title').value,
                 category: document.getElementById('category').value,
                 createdAt: new Date().toISOString()
