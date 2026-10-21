@@ -436,8 +436,6 @@
             allBookmarks = loadBookmarks();
             bookmarkCount.textContent = allBookmarks.length;
 
-            const bookmarksToDisplay = filterBookmarks(searchQuery);
-
             if (allBookmarks.length === 0) {
                 bookmarksList.innerHTML = '<p class="empty-message">No bookmarks yet. Create one to get started!</p>';
                 return;
@@ -575,20 +573,27 @@
                 createdAt: new Date().toISOString()
             };
 
-            const bookmarks = loadBookmarks();
-            bookmarks.push(newBookmark);
-            saveBookmarks(bookmarks);
+            try {
+                const bookmarks = loadBookmarks();
+                bookmarks.push(newBookmark);
+                saveBookmarks(bookmarks);
 
-            console.log('Bookmark saved to localStorage:', newBookmark);
+                console.log('Bookmark saved to localStorage:', newBookmark);
+                console.log('Total bookmarks:', bookmarks.length);
 
-            successMessage.style.display = 'block';
-            bookmarkCount.textContent = bookmarks.length;
+                successMessage.style.display = 'block';
+                bookmarkCount.textContent = bookmarks.length;
+                allBookmarks = bookmarks;
 
-            setTimeout(() => {
-                form.reset();
-                successMessage.style.display = 'none';
-                document.getElementById('url').focus();
-            }, 2000);
+                setTimeout(() => {
+                    form.reset();
+                    successMessage.style.display = 'none';
+                    document.getElementById('url').focus();
+                }, 2000);
+            } catch (error) {
+                console.error('Error saving bookmark:', error);
+                alert('Error saving bookmark. Please check the browser console.');
+            }
         });
 
         // Load bookmarks on page load
