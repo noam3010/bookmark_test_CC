@@ -304,6 +304,103 @@
             padding: 30px 20px;
             font-size: 14px;
         }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0;
+            margin-top: -5px;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-modal-save {
+            flex: 1;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-modal-save:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-modal-cancel {
+            flex: 1;
+            padding: 12px;
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .btn-modal-cancel:hover {
+            background: #d0d0d0;
+        }
+
+        .btn-edit {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
@@ -384,6 +481,43 @@
         </div>
     </div>
 
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            <div class="modal-header">Edit Bookmark</div>
+
+            <div class="form-group">
+                <label for="editUrl">URL</label>
+                <input type="text" id="editUrl" placeholder="https://example.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="editTitle">Title</label>
+                <input type="text" id="editTitle" placeholder="Enter bookmark title" required>
+            </div>
+
+            <div class="form-group">
+                <label for="editCategory">Category</label>
+                <select id="editCategory" required>
+                    <option value="">Select a category</option>
+                    <option value="work">Work</option>
+                    <option value="learning">Learning</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="shopping">Shopping</option>
+                    <option value="social">Social Media</option>
+                    <option value="news">News</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-modal-save" onclick="saveEditBookmark()">Save Changes</button>
+                <button class="btn-modal-cancel" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const STORAGE_KEY = 'bookmarks';
 
@@ -404,8 +538,10 @@
         const tabButtons = document.querySelectorAll('.tab-button');
         const tabContents = document.querySelectorAll('.tab-content');
         const searchInput = document.getElementById('searchInput');
+        const editModal = document.getElementById('editModal');
 
         let allBookmarks = [];
+        let editingIndex = -1;
 
         // Load bookmarks from localStorage
         function loadBookmarks() {
@@ -483,6 +619,7 @@
                                         </div>
                                         <div class="bookmark-actions">
                                             <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(bookmark.url)}')">Open</button>
+                                            <button class="btn-small btn-edit" onclick="openEditModal(${index})">Edit</button>
                                             <button class="btn-small btn-delete" onclick="deleteBookmark(${index})">Delete</button>
                                         </div>
                                     </div>
@@ -508,6 +645,59 @@
                 bookmarks.splice(index, 1);
                 saveBookmarks(bookmarks);
                 displayBookmarks();
+            }
+        };
+
+        // Open edit modal
+        window.openEditModal = function(index) {
+            editingIndex = index;
+            const bookmark = allBookmarks[index];
+
+            document.getElementById('editUrl').value = bookmark.url;
+            document.getElementById('editTitle').value = bookmark.title;
+            document.getElementById('editCategory').value = bookmark.category;
+
+            editModal.classList.add('active');
+        };
+
+        // Close edit modal
+        window.closeEditModal = function() {
+            editModal.classList.remove('active');
+            editingIndex = -1;
+        };
+
+        // Save edited bookmark
+        window.saveEditBookmark = function() {
+            if (editingIndex === -1) return;
+
+            const updatedUrl = document.getElementById('editUrl').value.trim();
+            const updatedTitle = document.getElementById('editTitle').value.trim();
+            const updatedCategory = document.getElementById('editCategory').value;
+
+            if (!updatedUrl || !updatedTitle || !updatedCategory) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            const bookmarks = loadBookmarks();
+            bookmarks[editingIndex] = {
+                ...bookmarks[editingIndex],
+                url: normalizeUrl(updatedUrl),
+                title: updatedTitle,
+                category: updatedCategory
+            };
+
+            saveBookmarks(bookmarks);
+            console.log('Bookmark updated:', bookmarks[editingIndex]);
+
+            closeEditModal();
+            displayBookmarks();
+        };
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target === editModal) {
+                closeEditModal();
             }
         };
 
