@@ -1,13 +1,18 @@
 {
   "name": "bookmark-app-test",
   "version": "1.0.0",
-  "description": "",
+  "description": "Bookmark app with comprehensive test suite",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
-  "keywords": [],
+  "keywords": ["bookmark", "test"],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
 }
