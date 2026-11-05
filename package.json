@@ -8,7 +8,10 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
-  "keywords": ["bookmark", "test"],
+  "keywords": [
+    "bookmark",
+    "test"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
