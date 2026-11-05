@@ -1,20 +1,42 @@
 /**
- * Comprehensive Test Suite for Bookmark App
- * Tests all required functionalities including create, read, update, delete,
- * search, and UI interactions
+ * Test Suite for Bookmark App
+ *
+ * These tests import the app's real helpers from bookmark-utils.js — the same
+ * file create-bookmark.html loads in the browser. A bug in one of those helpers
+ * therefore turns a test here red.
+ *
+ * Tests that can only assert on inline copies of logic (because the logic lives
+ * in displayBookmarks or in a DOM event handler, neither of which is importable)
+ * are grouped at the bottom and labelled as such. They cannot catch an app bug.
  */
 
+const {
+  STORAGE_KEY,
+  loadBookmarks,
+  saveBookmarks,
+  filterBookmarks,
+  validateBookmarkInput,
+  escapeHtml,
+  normalizeUrl
+} = require('./bookmark-utils');
+
+const CATEGORIES = ['work', 'learning', 'entertainment', 'shopping', 'social', 'news', 'other'];
+
+const sample = () => [
+  { url: 'https://github.com', title: 'GitHub', category: 'work' },
+  { url: 'https://developer.mozilla.org', title: 'MDN Web Docs', category: 'learning' },
+  { url: 'https://news.ycombinator.com', title: 'Hacker News', category: 'news' }
+];
+
 describe('Bookmark App - Core Functionality', () => {
-  const STORAGE_KEY = 'bookmarks';
   let mockLocalStorage;
 
   beforeEach(() => {
-    // Mock localStorage
     mockLocalStorage = {};
     global.localStorage = {
-      getItem: jest.fn((key) => mockLocalStorage[key] || null),
+      getItem: jest.fn((key) => (key in mockLocalStorage ? mockLocalStorage[key] : null)),
       setItem: jest.fn((key, value) => {
-        mockLocalStorage[key] = value;
+        mockLocalStorage[key] = String(value);
       }),
       removeItem: jest.fn((key) => {
         delete mockLocalStorage[key];
@@ -27,608 +49,466 @@ describe('Bookmark App - Core Functionality', () => {
 
   describe('Create Bookmark', () => {
     test('should create a new bookmark with valid data', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        title: 'Example Site',
-        category: 'work',
-        createdAt: new Date().toISOString()
-      };
+      const bookmark = { url: 'https://example.com', title: 'Example', category: 'work' };
 
-      const bookmarks = [];
-      bookmarks.push(bookmark);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+      saveBookmarks([bookmark]);
 
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      expect(stored).toHaveLength(1);
-      expect(stored[0]).toEqual(bookmark);
+      expect(loadBookmarks()).toEqual([bookmark]);
     });
 
     test('should handle multiple bookmarks', () => {
-      const bookmarks = [
-        {
-          url: 'https://example1.com',
-          title: 'Example 1',
-          category: 'work',
-          createdAt: new Date().toISOString()
-        },
-        {
-          url: 'https://example2.com',
-          title: 'Example 2',
-          category: 'learning',
-          createdAt: new Date().toISOString()
-        }
-      ];
+      saveBookmarks(sample());
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(stored).toHaveLength(2);
-      expect(stored[0].title).toBe('Example 1');
-      expect(stored[1].title).toBe('Example 2');
+      const loaded = loadBookmarks();
+      expect(loaded).toHaveLength(3);
+      expect(loaded.map((b) => b.title)).toEqual(['GitHub', 'MDN Web Docs', 'Hacker News']);
     });
 
-    test('should require URL field', () => {
-      const bookmark = {
-        title: 'No URL',
-        category: 'work'
-      };
+    test('should append to an existing list', () => {
+      saveBookmarks(sample());
 
-      expect(bookmark.url).toBeUndefined();
-      expect(bookmark).not.toHaveProperty('url');
+      const bookmarks = loadBookmarks();
+      bookmarks.push({ url: 'https://example.com', title: 'Example', category: 'other' });
+      saveBookmarks(bookmarks);
+
+      expect(loadBookmarks()).toHaveLength(4);
     });
 
-    test('should require title field', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        category: 'work'
-      };
+    test('should write to the key the app reads from', () => {
+      saveBookmarks(sample());
 
-      expect(bookmark.title).toBeUndefined();
-    });
-
-    test('should require category field', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        title: 'Example'
-      };
-
-      expect(bookmark.category).toBeUndefined();
+      expect(STORAGE_KEY).toBe('bookmarks');
+      expect(JSON.parse(mockLocalStorage[STORAGE_KEY])).toHaveLength(3);
     });
   });
 
   describe('Read/List Bookmarks', () => {
     test('should load bookmarks from localStorage', () => {
-      const bookmarks = [
-        { url: 'https://test1.com', title: 'Test 1', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://test2.com', title: 'Test 2', category: 'learning', createdAt: new Date().toISOString() }
-      ];
+      mockLocalStorage[STORAGE_KEY] = JSON.stringify(sample());
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-
-      expect(loaded).toEqual(bookmarks);
+      expect(loadBookmarks()).toHaveLength(3);
     });
 
     test('should return empty array when no bookmarks exist', () => {
-      localStorage.clear();
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      expect(loadBookmarks()).toEqual([]);
+    });
 
-      expect(loaded).toEqual([]);
-      expect(loaded).toHaveLength(0);
+    test('should return empty array when the stored value is an empty string', () => {
+      mockLocalStorage[STORAGE_KEY] = '';
+
+      expect(loadBookmarks()).toEqual([]);
     });
 
     test('should preserve bookmark order', () => {
-      const bookmarks = [
-        { url: 'https://first.com', title: 'First', category: 'work', createdAt: '2025-01-01' },
-        { url: 'https://second.com', title: 'Second', category: 'work', createdAt: '2025-01-02' },
-        { url: 'https://third.com', title: 'Third', category: 'work', createdAt: '2025-01-03' }
-      ];
+      const bookmarks = sample();
+      saveBookmarks(bookmarks);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].title).toBe('First');
-      expect(loaded[1].title).toBe('Second');
-      expect(loaded[2].title).toBe('Third');
+      expect(loadBookmarks().map((b) => b.url)).toEqual(bookmarks.map((b) => b.url));
     });
   });
 
   describe('Update Bookmark', () => {
+    beforeEach(() => saveBookmarks(sample()));
+
     test('should update bookmark URL', () => {
-      const bookmarks = [
-        { url: 'https://old.com', title: 'Test', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      const bookmarks = loadBookmarks();
+      bookmarks[0].url = 'https://github.com/noam3010';
+      saveBookmarks(bookmarks);
 
-      bookmarks[0].url = 'https://new.com';
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].url).toBe('https://new.com');
+      expect(loadBookmarks()[0].url).toBe('https://github.com/noam3010');
     });
 
     test('should update bookmark title', () => {
-      const bookmarks = [
-        { url: 'https://example.com', title: 'Old Title', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      const bookmarks = loadBookmarks();
+      bookmarks[1].title = 'MDN';
+      saveBookmarks(bookmarks);
 
-      bookmarks[0].title = 'New Title';
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].title).toBe('New Title');
+      expect(loadBookmarks()[1].title).toBe('MDN');
     });
 
     test('should update bookmark category', () => {
-      const bookmarks = [
-        { url: 'https://example.com', title: 'Test', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      const bookmarks = loadBookmarks();
+      bookmarks[2].category = 'social';
+      saveBookmarks(bookmarks);
 
-      bookmarks[0].category = 'learning';
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].category).toBe('learning');
+      expect(loadBookmarks()[2].category).toBe('social');
     });
 
     test('should update multiple fields at once', () => {
-      const bookmarks = [
-        { url: 'https://example.com', title: 'Test', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      const bookmarks = loadBookmarks();
+      Object.assign(bookmarks[0], { url: 'https://gitlab.com', title: 'GitLab', category: 'other' });
+      saveBookmarks(bookmarks);
 
-      bookmarks[0] = {
-        ...bookmarks[0],
-        url: 'https://new.com',
-        title: 'Updated',
-        category: 'entertainment'
-      };
+      expect(loadBookmarks()[0]).toEqual({
+        url: 'https://gitlab.com',
+        title: 'GitLab',
+        category: 'other'
+      });
+    });
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    test('should leave other bookmarks untouched', () => {
+      const bookmarks = loadBookmarks();
+      bookmarks[0].title = 'Changed';
+      saveBookmarks(bookmarks);
 
-      expect(loaded[0].url).toBe('https://new.com');
-      expect(loaded[0].title).toBe('Updated');
-      expect(loaded[0].category).toBe('entertainment');
+      const loaded = loadBookmarks();
+      expect(loaded[1].title).toBe('MDN Web Docs');
+      expect(loaded[2].title).toBe('Hacker News');
     });
   });
 
   describe('Delete Bookmark', () => {
+    beforeEach(() => saveBookmarks(sample()));
+
+    const removeAt = (index) => {
+      const bookmarks = loadBookmarks();
+      bookmarks.splice(index, 1);
+      saveBookmarks(bookmarks);
+      return loadBookmarks();
+    };
+
     test('should delete a bookmark by index', () => {
-      const bookmarks = [
-        { url: 'https://test1.com', title: 'Test 1', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://test2.com', title: 'Test 2', category: 'learning', createdAt: new Date().toISOString() },
-        { url: 'https://test3.com', title: 'Test 3', category: 'entertainment', createdAt: new Date().toISOString() }
-      ];
+      const remaining = removeAt(1);
 
-      bookmarks.splice(1, 1);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].title).toBe('Test 1');
-      expect(loaded[1].title).toBe('Test 3');
+      expect(remaining).toHaveLength(2);
+      expect(remaining.map((b) => b.title)).toEqual(['GitHub', 'Hacker News']);
     });
 
     test('should delete first bookmark', () => {
-      const bookmarks = [
-        { url: 'https://test1.com', title: 'Test 1', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://test2.com', title: 'Test 2', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      bookmarks.splice(0, 1);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].title).toBe('Test 2');
+      expect(removeAt(0).map((b) => b.title)).toEqual(['MDN Web Docs', 'Hacker News']);
     });
 
     test('should delete last bookmark', () => {
-      const bookmarks = [
-        { url: 'https://test1.com', title: 'Test 1', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://test2.com', title: 'Test 2', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      bookmarks.splice(bookmarks.length - 1, 1);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].title).toBe('Test 1');
+      expect(removeAt(2).map((b) => b.title)).toEqual(['GitHub', 'MDN Web Docs']);
     });
 
     test('should handle deleting from single bookmark list', () => {
-      const bookmarks = [
-        { url: 'https://test1.com', title: 'Test 1', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      saveBookmarks([{ url: 'https://only.com', title: 'Only', category: 'other' }]);
 
-      bookmarks.splice(0, 1);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded).toHaveLength(0);
+      expect(removeAt(0)).toEqual([]);
     });
   });
 
   describe('Search Functionality', () => {
-    test('should filter bookmarks by title', () => {
-      const bookmarks = [
-        { url: 'https://google.com', title: 'Google Search', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://github.com', title: 'GitHub', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://youtube.com', title: 'YouTube Videos', category: 'entertainment', createdAt: new Date().toISOString() }
-      ];
+    const bookmarks = sample();
 
-      const query = 'youtube';
-      const results = bookmarks.filter(b => b.title.toLowerCase().includes(query.toLowerCase()));
+    test('should filter bookmarks by title', () => {
+      const results = filterBookmarks(bookmarks, 'hacker');
 
       expect(results).toHaveLength(1);
-      expect(results[0].title).toBe('YouTube Videos');
+      expect(results[0].title).toBe('Hacker News');
     });
 
     test('should filter bookmarks by URL', () => {
-      const bookmarks = [
-        { url: 'https://google.com', title: 'Google', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://github.com', title: 'GitHub', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://stackoverflow.com', title: 'Stack Overflow', category: 'learning', createdAt: new Date().toISOString() }
-      ];
-
-      const query = 'github';
-      const results = bookmarks.filter(b => b.url.toLowerCase().includes(query.toLowerCase()));
+      const results = filterBookmarks(bookmarks, 'mozilla');
 
       expect(results).toHaveLength(1);
-      expect(results[0].url).toBe('https://github.com');
+      expect(results[0].title).toBe('MDN Web Docs');
     });
 
     test('should return empty results for no matches', () => {
-      const bookmarks = [
-        { url: 'https://google.com', title: 'Google', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      const query = 'nonexistent';
-      const results = bookmarks.filter(b =>
-        b.title.toLowerCase().includes(query.toLowerCase()) ||
-        b.url.toLowerCase().includes(query.toLowerCase())
-      );
-
-      expect(results).toHaveLength(0);
+      expect(filterBookmarks(bookmarks, 'nothing-matches-this')).toEqual([]);
     });
 
     test('should be case-insensitive', () => {
-      const bookmarks = [
-        { url: 'https://google.com', title: 'Google Search', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      const query = 'GOOGLE';
-      const results = bookmarks.filter(b => b.title.toLowerCase().includes(query.toLowerCase()));
-
-      expect(results).toHaveLength(1);
-      expect(results[0].title).toBe('Google Search');
+      expect(filterBookmarks(bookmarks, 'GITHUB')).toHaveLength(1);
+      expect(filterBookmarks(bookmarks, 'github')).toHaveLength(1);
     });
 
     test('should search with partial strings', () => {
-      const bookmarks = [
-        { url: 'https://stackoverflow.com', title: 'Stack Overflow', category: 'learning', createdAt: new Date().toISOString() }
-      ];
+      expect(filterBookmarks(bookmarks, 'git')).toHaveLength(1);
+      expect(filterBookmarks(bookmarks, 'news')).toHaveLength(1);
+    });
 
-      const query = 'flow';
-      const results = bookmarks.filter(b => b.title.toLowerCase().includes(query.toLowerCase()));
+    test('should return every bookmark for an empty query', () => {
+      expect(filterBookmarks(bookmarks, '')).toHaveLength(3);
+    });
 
-      expect(results).toHaveLength(1);
+    test('should return every bookmark for a whitespace-only query', () => {
+      expect(filterBookmarks(bookmarks, '   ')).toHaveLength(3);
+    });
+
+    test('should match on either title or URL', () => {
+      // 'news' appears in one title and one URL, on different bookmarks.
+      const results = filterBookmarks(
+        [
+          { url: 'https://example.com', title: 'News Daily', category: 'news' },
+          { url: 'https://news.example.com', title: 'Example', category: 'news' }
+        ],
+        'news'
+      );
+
+      expect(results).toHaveLength(2);
+    });
+
+    test('should not mutate the list it filters', () => {
+      const original = sample();
+      filterBookmarks(original, 'github');
+
+      expect(original).toHaveLength(3);
     });
   });
 
   describe('URL Normalization', () => {
     test('should add https:// to URL without protocol', () => {
-      const url = 'example.com';
-      const normalized = url.includes('://') ? url : 'https://' + url;
-
-      expect(normalized).toBe('https://example.com');
+      expect(normalizeUrl('example.com')).toBe('https://example.com');
     });
 
     test('should preserve https:// protocol', () => {
-      const url = 'https://example.com';
-      const normalized = url.includes('://') ? url : 'https://' + url;
-
-      expect(normalized).toBe('https://example.com');
+      expect(normalizeUrl('https://example.com')).toBe('https://example.com');
     });
 
     test('should preserve http:// protocol', () => {
-      const url = 'http://example.com';
-      const normalized = url.includes('://') ? url : 'https://' + url;
-
-      expect(normalized).toBe('http://example.com');
+      expect(normalizeUrl('http://example.com')).toBe('http://example.com');
     });
 
     test('should handle URLs with www prefix', () => {
-      const url = 'www.example.com';
-      const normalized = url.includes('://') ? url : 'https://' + url;
-
-      expect(normalized).toBe('https://www.example.com');
-    });
-  });
-
-  describe('Category Functionality', () => {
-    test('should support all required categories', () => {
-      const categories = ['work', 'learning', 'entertainment', 'shopping', 'social', 'news', 'other'];
-      const categoryColors = {
-        work: '#3b82f6',
-        learning: '#8b5cf6',
-        entertainment: '#ec4899',
-        shopping: '#f59e0b',
-        social: '#06b6d4',
-        news: '#ef4444',
-        other: '#6b7280'
-      };
-
-      categories.forEach(cat => {
-        expect(categoryColors).toHaveProperty(cat);
-      });
+      expect(normalizeUrl('www.example.com')).toBe('https://www.example.com');
     });
 
-    test('should group bookmarks by category', () => {
-      const bookmarks = [
-        { url: 'https://github.com', title: 'GitHub', category: 'work', createdAt: new Date().toISOString() },
-        { url: 'https://udemy.com', title: 'Udemy', category: 'learning', createdAt: new Date().toISOString() },
-        { url: 'https://linkedin.com', title: 'LinkedIn', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      const grouped = {};
-      bookmarks.forEach(bookmark => {
-        if (!grouped[bookmark.category]) {
-          grouped[bookmark.category] = [];
-        }
-        grouped[bookmark.category].push(bookmark);
-      });
-
-      expect(grouped).toHaveProperty('work');
-      expect(grouped).toHaveProperty('learning');
-      expect(grouped.work).toHaveLength(2);
-      expect(grouped.learning).toHaveLength(1);
+    test('should preserve a non-web scheme instead of double-prefixing it', () => {
+      // Regression: the old check only looked for http/https, so ftp:// became
+      // 'https://ftp://example.com'.
+      expect(normalizeUrl('ftp://example.com')).toBe('ftp://example.com');
     });
 
-    test('should handle bookmarks in different categories', () => {
-      const bookmarks = [
-        { url: 'https://amazon.com', title: 'Amazon', category: 'shopping', createdAt: new Date().toISOString() },
-        { url: 'https://twitter.com', title: 'Twitter', category: 'social', createdAt: new Date().toISOString() },
-        { url: 'https://bbc.com', title: 'BBC News', category: 'news', createdAt: new Date().toISOString() }
-      ];
+    test('should still add https:// to a bare host:port', () => {
+      // A colon alone is not a scheme — only '://' is.
+      expect(normalizeUrl('example.com:8080')).toBe('https://example.com:8080');
+    });
 
-      const categories = new Set(bookmarks.map(b => b.category));
+    test('should return falsy input unchanged', () => {
+      expect(normalizeUrl('')).toBe('');
+      expect(normalizeUrl(undefined)).toBeUndefined();
+    });
 
-      expect(categories.has('shopping')).toBe(true);
-      expect(categories.has('social')).toBe(true);
-      expect(categories.has('news')).toBe(true);
+    test('should be case-insensitive about the scheme', () => {
+      expect(normalizeUrl('HTTPS://example.com')).toBe('HTTPS://example.com');
     });
   });
 
   describe('XSS Prevention (HTML Escaping)', () => {
     test('should escape HTML in title', () => {
-      const title = '<script>alert("xss")</script>';
-      const escaped = title.replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      }[char]));
-
-      expect(escaped).toBe('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
+      expect(escapeHtml('<script>alert("xss")</script>')).toBe(
+        '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
+      );
     });
 
     test('should escape HTML in URL', () => {
-      const url = 'javascript:alert("xss")';
-      const escaped = url.replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      }[char]));
-
-      expect(escaped).toBe('javascript:alert(&quot;xss&quot;)');
+      expect(escapeHtml('https://x.com/?a=<b>')).toBe('https://x.com/?a=&lt;b&gt;');
     });
 
     test('should escape ampersand', () => {
-      const text = 'Tom & Jerry';
-      const escaped = text.replace(/&/g, '&amp;');
-
-      expect(escaped).toBe('Tom &amp; Jerry');
+      expect(escapeHtml('Tom & Jerry')).toBe('Tom &amp; Jerry');
     });
 
     test('should escape quotes', () => {
-      const text = 'He said "Hello"';
-      const escaped = text.replace(/"/g, '&quot;');
-
-      expect(escaped).toBe('He said &quot;Hello&quot;');
-    });
-  });
-
-  describe('Bookmark Count', () => {
-    test('should count zero bookmarks correctly', () => {
-      localStorage.clear();
-      const bookmarks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-
-      expect(bookmarks.length).toBe(0);
+      expect(escapeHtml('He said "hi"')).toBe('He said &quot;hi&quot;');
     });
 
-    test('should count single bookmark correctly', () => {
-      const bookmarks = [
-        { url: 'https://test.com', title: 'Test', category: 'work', createdAt: new Date().toISOString() }
-      ];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded.length).toBe(1);
+    test('should escape single quotes', () => {
+      // The app renders onclick="openBookmark('...')", so apostrophes matter.
+      expect(escapeHtml("O'Brien")).toBe('O&#039;Brien');
     });
 
-    test('should count multiple bookmarks correctly', () => {
-      const bookmarks = Array.from({ length: 10 }, (_, i) => ({
-        url: `https://test${i}.com`,
-        title: `Test ${i}`,
-        category: 'work',
-        createdAt: new Date().toISOString()
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded.length).toBe(10);
-    });
-  });
-
-  describe('Empty State', () => {
-    test('should display message when no bookmarks exist', () => {
-      localStorage.clear();
-      const bookmarks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-      const isEmpty = bookmarks.length === 0;
-
-      expect(isEmpty).toBe(true);
+    test('should escape every occurrence, not just the first', () => {
+      expect(escapeHtml('<<>>')).toBe('&lt;&lt;&gt;&gt;');
     });
 
-    test('should display correct message for empty search results', () => {
-      const bookmarks = [
-        { url: 'https://test.com', title: 'Test', category: 'work', createdAt: new Date().toISOString() }
-      ];
-
-      const query = 'nonexistent';
-      const results = bookmarks.filter(b =>
-        b.title.toLowerCase().includes(query.toLowerCase())
-      );
-
-      expect(results.length).toBe(0);
+    test('should leave safe text untouched', () => {
+      expect(escapeHtml('Hello world 123')).toBe('Hello world 123');
     });
   });
 
   describe('Data Persistence', () => {
     test('should persist bookmarks after page reload', () => {
-      const bookmarks = [
-        { url: 'https://persist.com', title: 'Persistent', category: 'work', createdAt: new Date().toISOString() }
-      ];
+      saveBookmarks(sample());
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded).toEqual(bookmarks);
+      // A reload is just another loadBookmarks() against the same store.
+      expect(loadBookmarks()).toHaveLength(3);
     });
 
     test('should handle corrupted localStorage data gracefully', () => {
-      localStorage.setItem(STORAGE_KEY, 'invalid json');
+      // Regression: loadBookmarks used to call JSON.parse with no try/catch,
+      // so bad data threw and broke the page on load.
+      mockLocalStorage[STORAGE_KEY] = 'not valid json {{{';
 
-      expect(() => {
-        JSON.parse(localStorage.getItem(STORAGE_KEY));
-      }).toThrow();
+      expect(() => loadBookmarks()).not.toThrow();
+      expect(loadBookmarks()).toEqual([]);
+    });
+
+    test('should return empty array when the stored JSON is not an array', () => {
+      mockLocalStorage[STORAGE_KEY] = JSON.stringify({ oops: true });
+
+      expect(loadBookmarks()).toEqual([]);
     });
 
     test('should initialize with empty array on first load', () => {
-      localStorage.clear();
-      const bookmarks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      expect(loadBookmarks()).toEqual([]);
+      expect(loadBookmarks()).toHaveLength(0);
+    });
 
-      expect(bookmarks).toEqual([]);
+    test('should survive a save/load round trip without changing data', () => {
+      const bookmarks = sample();
+      saveBookmarks(bookmarks);
+
+      expect(loadBookmarks()).toEqual(bookmarks);
     });
   });
 
   describe('Edge Cases', () => {
     test('should handle special characters in title', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        title: 'Special @#$%^&*() Characters!',
-        category: 'work',
-        createdAt: new Date().toISOString()
-      };
+      const bookmark = { url: 'https://x.com', title: 'C++ & C# <tips>', category: 'learning' };
+      saveBookmarks([bookmark]);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([bookmark]));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].title).toBe('Special @#$%^&*() Characters!');
+      expect(loadBookmarks()[0].title).toBe('C++ & C# <tips>');
+      expect(escapeHtml(loadBookmarks()[0].title)).toBe('C++ &amp; C# &lt;tips&gt;');
     });
 
     test('should handle very long URL', () => {
-      const longUrl = 'https://example.com/' + 'a'.repeat(500);
-      const bookmark = {
-        url: longUrl,
-        title: 'Long URL',
-        category: 'work',
-        createdAt: new Date().toISOString()
-      };
+      const url = 'https://example.com/' + 'a'.repeat(2000);
+      saveBookmarks([{ url, title: 'Long', category: 'other' }]);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([bookmark]));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].url.length).toBeGreaterThan(500);
+      expect(loadBookmarks()[0].url).toHaveLength(url.length);
     });
 
     test('should handle unicode characters', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        title: '测试 🎉 テスト',
-        category: 'work',
-        createdAt: new Date().toISOString()
-      };
+      const bookmark = { url: 'https://x.com', title: 'עברית 日本語 🔖', category: 'other' };
+      saveBookmarks([bookmark]);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([bookmark]));
-      const loaded = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-      expect(loaded[0].title).toBe('测试 🎉 テスト');
+      expect(loadBookmarks()[0].title).toBe('עברית 日本語 🔖');
     });
 
-    test('should handle whitespace-only input', () => {
-      const title = '   ';
-      const trimmed = title.trim();
+    test('should find a unicode title by search', () => {
+      expect(filterBookmarks([{ url: 'https://x.com', title: '🔖 Bookmark', category: 'other' }], '🔖'))
+        .toHaveLength(1);
+    });
 
-      expect(trimmed).toBe('');
+    test('should treat a whitespace-only search as no search', () => {
+      expect(filterBookmarks(sample(), '\t\n ')).toHaveLength(3);
     });
   });
 
-  describe('Tab Switching', () => {
-    test('should identify create tab', () => {
-      const tabName = 'create';
+  describe('Category Functionality', () => {
+    test('should support all required categories', () => {
+      saveBookmarks(CATEGORIES.map((category, i) => ({
+        url: `https://example${i}.com`,
+        title: `Site ${i}`,
+        category
+      })));
 
-      expect(tabName).toBe('create');
+      expect(loadBookmarks().map((b) => b.category)).toEqual(CATEGORIES);
     });
 
-    test('should identify list tab', () => {
-      const tabName = 'list';
+    test('should handle bookmarks in different categories', () => {
+      saveBookmarks(sample());
 
-      expect(tabName).toBe('list');
+      const categories = loadBookmarks().map((b) => b.category);
+      expect(new Set(categories).size).toBe(3);
     });
 
-    test('should only have two tabs', () => {
-      const tabs = ['create', 'list'];
+    test('should find bookmarks of one category after a save', () => {
+      saveBookmarks(sample());
 
-      expect(tabs).toHaveLength(2);
+      expect(loadBookmarks().filter((b) => b.category === 'work')).toHaveLength(1);
+    });
+  });
+
+  describe('Bookmark Count', () => {
+    test('should count zero bookmarks correctly', () => {
+      expect(loadBookmarks()).toHaveLength(0);
+    });
+
+    test('should count single bookmark correctly', () => {
+      saveBookmarks([{ url: 'https://x.com', title: 'X', category: 'other' }]);
+
+      expect(loadBookmarks()).toHaveLength(1);
+    });
+
+    test('should count multiple bookmarks correctly', () => {
+      saveBookmarks(sample());
+
+      expect(loadBookmarks()).toHaveLength(3);
+    });
+
+    test('should count filtered bookmarks, not all of them', () => {
+      saveBookmarks(sample());
+
+      expect(filterBookmarks(loadBookmarks(), 'github')).toHaveLength(1);
     });
   });
 
   describe('Form Validation', () => {
-    test('should require non-empty URL', () => {
-      const url = '';
-      const isValid = url.trim() !== '';
-
-      expect(isValid).toBe(false);
-    });
-
-    test('should require non-empty title', () => {
-      const title = '';
-      const isValid = title.trim() !== '';
-
-      expect(isValid).toBe(false);
-    });
-
-    test('should require category selection', () => {
-      const category = '';
-      const isValid = category !== '';
-
-      expect(isValid).toBe(false);
-    });
+    const valid = { url: 'example.com', title: 'Example', category: 'work' };
 
     test('should accept valid bookmark data', () => {
-      const bookmark = {
-        url: 'https://example.com',
-        title: 'Example',
-        category: 'work'
-      };
+      expect(validateBookmarkInput(valid)).toBeNull();
+    });
 
-      const isValid = bookmark.url && bookmark.title && bookmark.category;
+    test('should reject an empty URL', () => {
+      expect(validateBookmarkInput({ ...valid, url: '' })).toBe('Please enter a URL');
+    });
 
-      expect(isValid).toBeTruthy();
+    test('should reject a whitespace-only URL', () => {
+      expect(validateBookmarkInput({ ...valid, url: '   ' })).toBe('Please enter a URL');
+    });
+
+    test('should reject an empty title', () => {
+      expect(validateBookmarkInput({ ...valid, title: '' })).toBe('Please enter a title');
+    });
+
+    test('should reject a whitespace-only title', () => {
+      // The HTML `required` attribute accepts "   ", so the JS has to catch it.
+      expect(validateBookmarkInput({ ...valid, title: '   ' })).toBe('Please enter a title');
+    });
+
+    test('should reject a missing category', () => {
+      expect(validateBookmarkInput({ ...valid, category: '' })).toBe('Please choose a category');
+    });
+
+    test('should report the URL first when several fields are empty', () => {
+      expect(validateBookmarkInput({ url: '', title: '', category: '' })).toBe('Please enter a URL');
+    });
+
+    test('should handle missing fields entirely', () => {
+      expect(validateBookmarkInput({})).toBe('Please enter a URL');
+    });
+  });
+});
+
+/**
+ * ---------------------------------------------------------------------------
+ * Tests below do NOT touch app code.
+ *
+ * The logic they describe lives inside displayBookmarks() or inside a DOM event
+ * handler in create-bookmark.html, neither of which Jest can import (there is no
+ * DOM here — jest.config.js uses testEnvironment: 'node'). These tests assert on
+ * inline copies, so they stay green even if the app breaks. They document intent
+ * only. To make them real, they need jsdom or a browser test runner.
+ * ---------------------------------------------------------------------------
+ */
+describe('Not covering app code - intent only', () => {
+  describe('Empty State (rendered by displayBookmarks)', () => {
+    test('should expect a message when no bookmarks exist', () => {
+      const bookmarks = [];
+
+      expect(bookmarks.length === 0).toBe(true);
+    });
+
+    test('should expect a different message for empty search results', () => {
+      const results = filterBookmarks(sample(), 'nothing-matches');
+
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('Tab Switching (DOM event handler)', () => {
+    test('should expect exactly two tabs: create and list', () => {
+      const tabs = ['create', 'list'];
+
+      expect(tabs).toHaveLength(2);
+      expect(tabs).toContain('create');
+      expect(tabs).toContain('list');
     });
   });
 });
