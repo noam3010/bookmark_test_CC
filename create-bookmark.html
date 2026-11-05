@@ -110,6 +110,16 @@
             font-size: 14px;
         }
 
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -419,6 +429,8 @@
                 ✓ Bookmark created successfully!
             </div>
 
+            <div class="error-message" id="createError"></div>
+
             <form id="bookmarkForm">
                 <div class="form-group">
                     <label for="url">URL *</label>
@@ -487,6 +499,8 @@
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
             <div class="modal-header">Edit Bookmark</div>
 
+            <div class="error-message" id="editError"></div>
+
             <div class="form-group">
                 <label for="editUrl">URL</label>
                 <input type="text" id="editUrl" placeholder="https://example.com" required>
@@ -518,9 +532,8 @@
         </div>
     </div>
 
+    <script src="bookmark-utils.js"></script>
     <script>
-        const STORAGE_KEY = 'bookmarks';
-
         const CATEGORY_COLORS = {
             work: '#3b82f6',
             learning: '#8b5cf6',
@@ -539,33 +552,23 @@
         const tabContents = document.querySelectorAll('.tab-content');
         const searchInput = document.getElementById('searchInput');
         const editModal = document.getElementById('editModal');
+        const createError = document.getElementById('createError');
+        const editError = document.getElementById('editError');
+
+        // Show a validation message in the page. alert() is avoided because the
+        // browser prefixes those dialogs with the page origin (e.g. "file://").
+        function showError(box, message) {
+            box.textContent = message;
+            box.style.display = 'block';
+        }
+
+        function clearError(box) {
+            box.textContent = '';
+            box.style.display = 'none';
+        }
 
         let allBookmarks = [];
         let editingIndex = -1;
-
-        // Load bookmarks from localStorage
-        function loadBookmarks() {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            return stored ? JSON.parse(stored) : [];
-        }
-
-        // Save bookmarks to localStorage
-        function saveBookmarks(bookmarks) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-        }
-
-        // Filter bookmarks based on search query
-        function filterBookmarks(searchQuery) {
-            if (!searchQuery.trim()) {
-                return allBookmarks;
-            }
-
-            const query = searchQuery.toLowerCase();
-            return allBookmarks.filter(bookmark =>
-                bookmark.title.toLowerCase().includes(query) ||
-                bookmark.url.toLowerCase().includes(query)
-            );
-        }
 
         // Display bookmarks on the list tab
         function displayBookmarks(searchQuery = '') {
@@ -577,7 +580,7 @@
                 return;
             }
 
-            const bookmarksToDisplay = filterBookmarks(searchQuery);
+            const bookmarksToDisplay = filterBookmarks(allBookmarks, searchQuery);
 
             if (bookmarksToDisplay.length === 0) {
                 bookmarksList.innerHTML = '<p class="no-results">No bookmarks match your search.</p>';
@@ -657,12 +660,14 @@
             document.getElementById('editTitle').value = bookmark.title;
             document.getElementById('editCategory').value = bookmark.category;
 
+            clearError(editError);
             editModal.classList.add('active');
         };
 
         // Close edit modal
         window.closeEditModal = function() {
             editModal.classList.remove('active');
+            clearError(editError);
             editingIndex = -1;
         };
 
@@ -674,10 +679,19 @@
             const updatedTitle = document.getElementById('editTitle').value.trim();
             const updatedCategory = document.getElementById('editCategory').value;
 
-            if (!updatedUrl || !updatedTitle || !updatedCategory) {
-                alert('Please fill in all fields');
+            // Same rule as the create form, from bookmark-utils.js.
+            const error = validateBookmarkInput({
+                url: updatedUrl,
+                title: updatedTitle,
+                category: updatedCategory
+            });
+
+            if (error) {
+                showError(editError, error);
                 return;
             }
+
+            clearError(editError);
 
             const bookmarks = loadBookmarks();
             bookmarks[editingIndex] = {
@@ -700,18 +714,6 @@
                 closeEditModal();
             }
         };
-
-        // Escape HTML to prevent XSS
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, char => map[char]);
-        }
 
         // Search functionality
         searchInput.addEventListener('input', (e) => {
@@ -736,30 +738,32 @@
             });
         });
 
-        // Normalize URL - add https:// if no protocol
-        function normalizeUrl(url) {
-            if (!url) return url;
-            if (!/^https?:\/\//.test(url)) {
-                return 'https://' + url;
-            }
-            return url;
-        }
-
         // Form submission
         form.addEventListener('submit', (e) => {
             e.preventDefault();
 
-            let urlValue = document.getElementById('url').value.trim();
+            const urlValue = document.getElementById('url').value.trim();
+            const titleValue = document.getElementById('title').value.trim();
+            const categoryValue = document.getElementById('category').value;
 
-            if (!urlValue) {
-                alert('Please enter a URL');
+            // Same rule the tests check, from bookmark-utils.js.
+            const error = validateBookmarkInput({
+                url: urlValue,
+                title: titleValue,
+                category: categoryValue
+            });
+
+            if (error) {
+                showError(createError, error);
                 return;
             }
 
+            clearError(createError);
+
             const newBookmark = {
                 url: normalizeUrl(urlValue),
-                title: document.getElementById('title').value,
-                category: document.getElementById('category').value,
+                title: titleValue,
+                category: categoryValue,
                 createdAt: new Date().toISOString()
             };
 
@@ -782,7 +786,7 @@
                 }, 2000);
             } catch (error) {
                 console.error('Error saving bookmark:', error);
-                alert('Error saving bookmark. Please check the browser console.');
+                showError(createError, 'Error saving bookmark. Please check the browser console.');
             }
         });
 
