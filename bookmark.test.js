@@ -272,6 +272,17 @@ describe('Bookmark App - Core Functionality', () => {
       expect(normalizeUrl('ftp://example.com')).toBe('ftp://example.com');
     });
 
+    test('should not let a javascript: URL through as a live link', () => {
+      // Regression: the old check let any '://' pass, so this stayed a javascript: link.
+      expect(normalizeUrl('javascript://%0aalert(document.domain)'))
+        .toBe('https://javascript://%0aalert(document.domain)');
+    });
+
+    test('should not let a data: URL through either', () => {
+      expect(normalizeUrl('data://text/html,<script>alert(1)</script>'))
+        .toBe('https://data://text/html,<script>alert(1)</script>');
+    });
+
     test('should still add https:// to a bare host:port', () => {
       // A colon alone is not a scheme — only '://' is.
       expect(normalizeUrl('example.com:8080')).toBe('https://example.com:8080');
@@ -307,7 +318,7 @@ describe('Bookmark App - Core Functionality', () => {
     });
 
     test('should escape single quotes', () => {
-      // The app renders onclick="openBookmark('...')", so apostrophes matter.
+      // Titles and URLs are inserted into HTML attributes, so apostrophes matter.
       expect(escapeHtml("O'Brien")).toBe('O&#039;Brien');
     });
 

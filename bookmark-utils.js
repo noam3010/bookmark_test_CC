@@ -62,13 +62,15 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, char => map[char]);
 }
 
-// Normalize URL - add https:// when the URL carries no scheme.
-// A URL that already has one (http://, https://, ftp://) is left untouched.
-// A scheme is detected by `://`, so a bare host:port like example.com:8080
-// is still treated as needing https://.
+// Normalize URL - add https:// unless the URL already starts with an
+// allowed scheme (http://, https://, ftp://). Anything else, including
+// javascript:, is prefixed too, so it can never become a live script link.
+// A bare host:port like example.com:8080 has no '://', so it gets https://.
+const ALLOWED_URL_SCHEMES = /^(https?|ftp):\/\//i;
+
 function normalizeUrl(url) {
     if (!url) return url;
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+    if (ALLOWED_URL_SCHEMES.test(url)) {
         return url;
     }
     return 'https://' + url;

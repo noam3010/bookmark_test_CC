@@ -621,7 +621,7 @@
                                             </a>
                                         </div>
                                         <div class="bookmark-actions">
-                                            <button class="btn-small btn-open" onclick="openBookmark('${escapeHtml(bookmark.url)}')">Open</button>
+                                            <button class="btn-small btn-open" onclick="openBookmark(${index})">Open</button>
                                             <button class="btn-small btn-edit" onclick="openEditModal(${index})">Edit</button>
                                             <button class="btn-small btn-delete" onclick="deleteBookmark(${index})">Delete</button>
                                         </div>
@@ -637,8 +637,13 @@
         }
 
         // Open bookmark in new tab
-        window.openBookmark = function(url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
+        // Takes the list position, like openEditModal and deleteBookmark, so
+        // the URL never gets written into the onclick attribute.
+        window.openBookmark = function(index) {
+            const bookmark = loadBookmarks()[index];
+            if (bookmark) {
+                window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+            }
         };
 
         // Delete bookmark
