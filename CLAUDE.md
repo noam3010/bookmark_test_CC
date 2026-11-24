@@ -31,7 +31,7 @@ Keep `bookmark-utils.js` free of DOM access, or Jest can't load it.
 ## Commands
 
 ```
-npm test                 # 72 tests
+npm test                 # 75 tests
 npm run test:coverage    # expect 100% statements, ~96% branches
 ```
 

@@ -11,6 +11,7 @@
 
 const {
   STORAGE_KEY,
+  BACKUP_KEY,
   loadBookmarks,
   saveBookmarks,
   appendBookmark,
@@ -353,6 +354,30 @@ describe('Bookmark App - Core Functionality', () => {
 
       expect(() => loadBookmarks()).not.toThrow();
       expect(loadBookmarks()).toEqual([]);
+    });
+
+    test('should back up unreadable data before the next save can overwrite it', () => {
+      mockLocalStorage[STORAGE_KEY] = 'not valid json {{{';
+
+      saveBookmarks(appendBookmark(loadBookmarks(), sample()[0]));
+
+      expect(mockLocalStorage[BACKUP_KEY]).toBe('not valid json {{{');
+      expect(loadBookmarks()).toHaveLength(1);
+    });
+
+    test('should back up valid JSON that is not a list', () => {
+      mockLocalStorage[STORAGE_KEY] = JSON.stringify({ oops: true });
+
+      loadBookmarks();
+
+      expect(mockLocalStorage[BACKUP_KEY]).toBe(JSON.stringify({ oops: true }));
+    });
+
+    test('should not create a backup when the stored data is fine', () => {
+      saveBookmarks(sample());
+      loadBookmarks();
+
+      expect(mockLocalStorage[BACKUP_KEY]).toBeUndefined();
     });
 
     test('should return empty array when the stored JSON is not an array', () => {

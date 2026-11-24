@@ -8,17 +8,34 @@
  */
 
 const STORAGE_KEY = 'bookmarks';
+const BACKUP_KEY = 'bookmarks-corrupt-backup';
 
-// Load bookmarks from localStorage. Returns [] if there is nothing stored,
-// or if what is stored is not valid JSON, so bad data can't break page load.
+// Load bookmarks from localStorage. Returns [] if there is nothing stored.
+// If what is stored is not a valid list, the raw value is copied to BACKUP_KEY
+// first, so the next save cannot silently erase it. Bad data still can't break
+// page load.
 function loadBookmarks() {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return [];
     try {
         const parsed = JSON.parse(stored);
-        return Array.isArray(parsed) ? parsed : [];
+        if (Array.isArray(parsed)) return parsed;
     } catch (e) {
-        return [];
+        // Not JSON at all. Fall through to the backup below.
+    }
+    backupCorruptValue(stored);
+    return [];
+}
+
+// Copy a value we could not read into BACKUP_KEY. Skips the write when the
+// backup already holds the same value, so reloading the page does not churn.
+function backupCorruptValue(raw) {
+    try {
+        if (localStorage.getItem(BACKUP_KEY) !== raw) {
+            localStorage.setItem(BACKUP_KEY, raw);
+        }
+    } catch (e) {
+        // Storage is full or blocked. Nothing more can be done safely here.
     }
 }
 
@@ -98,6 +115,7 @@ function normalizeUrl(url) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         STORAGE_KEY,
+        BACKUP_KEY,
         loadBookmarks,
         saveBookmarks,
         appendBookmark,
