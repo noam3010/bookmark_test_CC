@@ -5,15 +5,17 @@
  * file create-bookmark.html loads in the browser. A bug in one of those helpers
  * therefore turns a test here red.
  *
- * Tests that can only assert on inline copies of logic (because the logic lives
- * in displayBookmarks or in a DOM event handler, neither of which is importable)
- * are grouped at the bottom and labelled as such. They cannot catch an app bug.
+ * Not covered: rendering (displayBookmarks) and DOM event handlers. Jest runs
+ * in a node environment with no DOM, so those need jsdom or a browser runner.
  */
 
 const {
   STORAGE_KEY,
   loadBookmarks,
   saveBookmarks,
+  appendBookmark,
+  updateBookmarkAt,
+  deleteBookmarkAt,
   filterBookmarks,
   validateBookmarkInput,
   escapeHtml,
@@ -65,13 +67,20 @@ describe('Bookmark App - Core Functionality', () => {
     });
 
     test('should append to an existing list', () => {
-      saveBookmarks(sample());
+      const added = { url: 'https://example.com', title: 'Example', category: 'other' };
 
-      const bookmarks = loadBookmarks();
-      bookmarks.push({ url: 'https://example.com', title: 'Example', category: 'other' });
-      saveBookmarks(bookmarks);
+      const result = appendBookmark(sample(), added);
 
-      expect(loadBookmarks()).toHaveLength(4);
+      expect(result).toHaveLength(4);
+      expect(result[3]).toEqual(added);
+    });
+
+    test('should not change the list it was given when appending', () => {
+      const original = sample();
+
+      appendBookmark(original, { url: 'https://example.com', title: 'Example', category: 'other' });
+
+      expect(original).toHaveLength(3);
     });
 
     test('should write to the key the app reads from', () => {
@@ -108,84 +117,82 @@ describe('Bookmark App - Core Functionality', () => {
   });
 
   describe('Update Bookmark', () => {
-    beforeEach(() => saveBookmarks(sample()));
-
     test('should update bookmark URL', () => {
-      const bookmarks = loadBookmarks();
-      bookmarks[0].url = 'https://github.com/noam3010';
-      saveBookmarks(bookmarks);
+      const result = updateBookmarkAt(sample(), 0, { url: 'https://github.com/noam3010' });
 
-      expect(loadBookmarks()[0].url).toBe('https://github.com/noam3010');
+      expect(result[0].url).toBe('https://github.com/noam3010');
     });
 
     test('should update bookmark title', () => {
-      const bookmarks = loadBookmarks();
-      bookmarks[1].title = 'MDN';
-      saveBookmarks(bookmarks);
+      const result = updateBookmarkAt(sample(), 1, { title: 'MDN' });
 
-      expect(loadBookmarks()[1].title).toBe('MDN');
+      expect(result[1].title).toBe('MDN');
     });
 
     test('should update bookmark category', () => {
-      const bookmarks = loadBookmarks();
-      bookmarks[2].category = 'social';
-      saveBookmarks(bookmarks);
+      const result = updateBookmarkAt(sample(), 2, { category: 'social' });
 
-      expect(loadBookmarks()[2].category).toBe('social');
+      expect(result[2].category).toBe('social');
     });
 
     test('should update multiple fields at once', () => {
-      const bookmarks = loadBookmarks();
-      Object.assign(bookmarks[0], { url: 'https://gitlab.com', title: 'GitLab', category: 'other' });
-      saveBookmarks(bookmarks);
-
-      expect(loadBookmarks()[0]).toEqual({
+      const result = updateBookmarkAt(sample(), 0, {
         url: 'https://gitlab.com',
         title: 'GitLab',
         category: 'other'
       });
+
+      expect(result[0]).toEqual({ url: 'https://gitlab.com', title: 'GitLab', category: 'other' });
     });
 
     test('should leave other bookmarks untouched', () => {
-      const bookmarks = loadBookmarks();
-      bookmarks[0].title = 'Changed';
-      saveBookmarks(bookmarks);
+      const result = updateBookmarkAt(sample(), 0, { title: 'Changed' });
 
-      const loaded = loadBookmarks();
-      expect(loaded[1].title).toBe('MDN Web Docs');
-      expect(loaded[2].title).toBe('Hacker News');
+      expect(result[1]).toEqual(sample()[1]);
+      expect(result[2]).toEqual(sample()[2]);
+    });
+
+    test('should not change the list it was given', () => {
+      const original = sample();
+
+      updateBookmarkAt(original, 0, { title: 'Changed' });
+
+      expect(original[0].title).toBe('GitHub');
+    });
+
+    test('should leave the list unchanged for an index that does not exist', () => {
+      expect(updateBookmarkAt(sample(), 99, { title: 'Nope' })).toEqual(sample());
     });
   });
 
   describe('Delete Bookmark', () => {
-    beforeEach(() => saveBookmarks(sample()));
-
-    const removeAt = (index) => {
-      const bookmarks = loadBookmarks();
-      bookmarks.splice(index, 1);
-      saveBookmarks(bookmarks);
-      return loadBookmarks();
-    };
-
     test('should delete a bookmark by index', () => {
-      const remaining = removeAt(1);
+      const remaining = deleteBookmarkAt(sample(), 1);
 
       expect(remaining).toHaveLength(2);
       expect(remaining.map((b) => b.title)).toEqual(['GitHub', 'Hacker News']);
     });
 
     test('should delete first bookmark', () => {
-      expect(removeAt(0).map((b) => b.title)).toEqual(['MDN Web Docs', 'Hacker News']);
+      expect(deleteBookmarkAt(sample(), 0).map((b) => b.title)).toEqual(['MDN Web Docs', 'Hacker News']);
     });
 
     test('should delete last bookmark', () => {
-      expect(removeAt(2).map((b) => b.title)).toEqual(['GitHub', 'MDN Web Docs']);
+      expect(deleteBookmarkAt(sample(), 2).map((b) => b.title)).toEqual(['GitHub', 'MDN Web Docs']);
     });
 
     test('should handle deleting from single bookmark list', () => {
-      saveBookmarks([{ url: 'https://only.com', title: 'Only', category: 'other' }]);
+      const only = [{ url: 'https://only.com', title: 'Only', category: 'other' }];
 
-      expect(removeAt(0)).toEqual([]);
+      expect(deleteBookmarkAt(only, 0)).toEqual([]);
+    });
+
+    test('should not change the list it was given', () => {
+      const original = sample();
+
+      deleteBookmarkAt(original, 0);
+
+      expect(original).toHaveLength(3);
     });
   });
 
@@ -483,43 +490,6 @@ describe('Bookmark App - Core Functionality', () => {
 
     test('should handle missing fields entirely', () => {
       expect(validateBookmarkInput({})).toBe('Please enter a URL');
-    });
-  });
-});
-
-/**
- * ---------------------------------------------------------------------------
- * Tests below do NOT touch app code.
- *
- * The logic they describe lives inside displayBookmarks() or inside a DOM event
- * handler in create-bookmark.html, neither of which Jest can import (there is no
- * DOM here — jest.config.js uses testEnvironment: 'node'). These tests assert on
- * inline copies, so they stay green even if the app breaks. They document intent
- * only. To make them real, they need jsdom or a browser test runner.
- * ---------------------------------------------------------------------------
- */
-describe('Not covering app code - intent only', () => {
-  describe('Empty State (rendered by displayBookmarks)', () => {
-    test('should expect a message when no bookmarks exist', () => {
-      const bookmarks = [];
-
-      expect(bookmarks.length === 0).toBe(true);
-    });
-
-    test('should expect a different message for empty search results', () => {
-      const results = filterBookmarks(sample(), 'nothing-matches');
-
-      expect(results).toHaveLength(0);
-    });
-  });
-
-  describe('Tab Switching (DOM event handler)', () => {
-    test('should expect exactly two tabs: create and list', () => {
-      const tabs = ['create', 'list'];
-
-      expect(tabs).toHaveLength(2);
-      expect(tabs).toContain('create');
-      expect(tabs).toContain('list');
     });
   });
 });

@@ -27,6 +27,24 @@ function saveBookmarks(bookmarks) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
 }
 
+// The three list changes the app makes. Each returns a new list and leaves
+// the one passed in untouched.
+
+// Add a bookmark to the end of the list.
+function appendBookmark(bookmarks, bookmark) {
+    return [...bookmarks, bookmark];
+}
+
+// Merge `changes` into the bookmark at `index`.
+function updateBookmarkAt(bookmarks, index, changes) {
+    return bookmarks.map((bookmark, i) => (i === index ? { ...bookmark, ...changes } : bookmark));
+}
+
+// Remove the bookmark at `index`.
+function deleteBookmarkAt(bookmarks, index) {
+    return bookmarks.filter((_, i) => i !== index);
+}
+
 // Filter a list of bookmarks by title or URL. An empty query returns them all.
 function filterBookmarks(bookmarks, searchQuery) {
     if (!searchQuery || !searchQuery.trim()) {
@@ -82,6 +100,9 @@ if (typeof module !== 'undefined' && module.exports) {
         STORAGE_KEY,
         loadBookmarks,
         saveBookmarks,
+        appendBookmark,
+        updateBookmarkAt,
+        deleteBookmarkAt,
         filterBookmarks,
         validateBookmarkInput,
         escapeHtml,

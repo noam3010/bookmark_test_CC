@@ -649,8 +649,7 @@
         // Delete bookmark
         window.deleteBookmark = function(index) {
             if (confirm('Are you sure you want to delete this bookmark?')) {
-                const bookmarks = loadBookmarks();
-                bookmarks.splice(index, 1);
+                const bookmarks = deleteBookmarkAt(loadBookmarks(), index);
                 saveBookmarks(bookmarks);
                 displayBookmarks();
             }
@@ -698,13 +697,11 @@
 
             clearError(editError);
 
-            const bookmarks = loadBookmarks();
-            bookmarks[editingIndex] = {
-                ...bookmarks[editingIndex],
+            const bookmarks = updateBookmarkAt(loadBookmarks(), editingIndex, {
                 url: normalizeUrl(updatedUrl),
                 title: updatedTitle,
                 category: updatedCategory
-            };
+            });
 
             saveBookmarks(bookmarks);
             console.log('Bookmark updated:', bookmarks[editingIndex]);
@@ -773,8 +770,7 @@
             };
 
             try {
-                const bookmarks = loadBookmarks();
-                bookmarks.push(newBookmark);
+                const bookmarks = appendBookmark(loadBookmarks(), newBookmark);
                 saveBookmarks(bookmarks);
 
                 console.log('Bookmark saved to localStorage:', newBookmark);
