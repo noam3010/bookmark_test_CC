@@ -17,6 +17,7 @@ const {
   appendBookmark,
   updateBookmarkAt,
   deleteBookmarkAt,
+  findBookmarkIndex,
   filterBookmarks,
   validateBookmarkInput,
   escapeHtml,
@@ -163,6 +164,32 @@ describe('Bookmark App - Core Functionality', () => {
 
     test('should leave the list unchanged for an index that does not exist', () => {
       expect(updateBookmarkAt(sample(), 99, { title: 'Nope' })).toEqual(sample());
+    });
+  });
+
+  describe('Edit target', () => {
+    test('should find a bookmark by its contents', () => {
+      expect(findBookmarkIndex(sample(), sample()[1])).toBe(1);
+    });
+
+    test('should return -1 when the bookmark is no longer in the list', () => {
+      const gone = { url: 'https://gone.com', title: 'Gone', category: 'other' };
+
+      expect(findBookmarkIndex(sample(), gone)).toBe(-1);
+    });
+
+    test('should edit the same bookmark after an earlier one is deleted', () => {
+      // The edit window opened on Hacker News at index 2. Then the first
+      // bookmark is deleted, so Hacker News moves to index 1.
+      const openedOn = sample()[2];
+      const afterDelete = deleteBookmarkAt(sample(), 0);
+
+      const index = findBookmarkIndex(afterDelete, openedOn);
+      const saved = updateBookmarkAt(afterDelete, index, { title: 'HN' });
+
+      expect(index).toBe(1);
+      expect(saved[1].title).toBe('HN');
+      expect(saved[0].title).toBe('MDN Web Docs');
     });
   });
 

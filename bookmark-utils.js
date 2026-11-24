@@ -62,6 +62,14 @@ function deleteBookmarkAt(bookmarks, index) {
     return bookmarks.filter((_, i) => i !== index);
 }
 
+// Find where a bookmark sits now, by its contents. Positions shift when other
+// bookmarks are deleted, so an index saved earlier can point at the wrong one.
+// Returns -1 if the bookmark is no longer in the list.
+function findBookmarkIndex(bookmarks, target) {
+    const wanted = JSON.stringify(target);
+    return bookmarks.findIndex(bookmark => JSON.stringify(bookmark) === wanted);
+}
+
 // Filter a list of bookmarks by title or URL. An empty query returns them all.
 function filterBookmarks(bookmarks, searchQuery) {
     if (!searchQuery || !searchQuery.trim()) {
@@ -121,6 +129,7 @@ if (typeof module !== 'undefined' && module.exports) {
         appendBookmark,
         updateBookmarkAt,
         deleteBookmarkAt,
+        findBookmarkIndex,
         filterBookmarks,
         validateBookmarkInput,
         escapeHtml,

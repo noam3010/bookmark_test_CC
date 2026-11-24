@@ -568,7 +568,9 @@
         }
 
         let allBookmarks = [];
-        let editingIndex = -1;
+        // The bookmark the edit window opened on, copied by value. Its list
+        // position can shift before saving, so we look it up again by contents.
+        let editingBookmark = null;
 
         // Display bookmarks on the list tab
         function displayBookmarks(searchQuery = '') {
@@ -657,8 +659,8 @@
 
         // Open edit modal
         window.openEditModal = function(index) {
-            editingIndex = index;
             const bookmark = allBookmarks[index];
+            editingBookmark = { ...bookmark };
 
             document.getElementById('editUrl').value = bookmark.url;
             document.getElementById('editTitle').value = bookmark.title;
@@ -672,12 +674,12 @@
         window.closeEditModal = function() {
             editModal.classList.remove('active');
             clearError(editError);
-            editingIndex = -1;
+            editingBookmark = null;
         };
 
         // Save edited bookmark
         window.saveEditBookmark = function() {
-            if (editingIndex === -1) return;
+            if (!editingBookmark) return;
 
             const updatedUrl = document.getElementById('editUrl').value.trim();
             const updatedTitle = document.getElementById('editTitle').value.trim();
@@ -697,14 +699,21 @@
 
             clearError(editError);
 
-            const bookmarks = updateBookmarkAt(loadBookmarks(), editingIndex, {
+            const current = loadBookmarks();
+            const index = findBookmarkIndex(current, editingBookmark);
+            if (index === -1) {
+                showError(editError, 'This bookmark was changed or deleted. Close and try again.');
+                return;
+            }
+
+            const bookmarks = updateBookmarkAt(current, index, {
                 url: normalizeUrl(updatedUrl),
                 title: updatedTitle,
                 category: updatedCategory
             });
 
             saveBookmarks(bookmarks);
-            console.log('Bookmark updated:', bookmarks[editingIndex]);
+            console.log('Bookmark updated:', bookmarks[index]);
 
             closeEditModal();
             displayBookmarks();
