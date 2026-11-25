@@ -640,19 +640,24 @@
 
         // Open bookmark in new tab
         // Takes the list position, like openEditModal and deleteBookmark, so
-        // the URL never gets written into the onclick attribute.
+        // the URL never gets written into the onclick attribute. The position
+        // refers to allBookmarks, the list as it was drawn, so this opens the
+        // bookmark that was clicked even if storage has changed since.
         window.openBookmark = function(index) {
-            const bookmark = loadBookmarks()[index];
+            const bookmark = allBookmarks[index];
             if (bookmark) {
                 window.open(bookmark.url, '_blank', 'noopener,noreferrer');
             }
         };
 
-        // Delete bookmark
+        // Delete bookmark. The position refers to the list as it was drawn;
+        // storage may have changed since (another tab), so find the clicked
+        // bookmark again by its contents before deleting.
         window.deleteBookmark = function(index) {
+            const target = allBookmarks[index];
+            if (!target) return;
             if (confirm('Are you sure you want to delete this bookmark?')) {
-                const bookmarks = deleteBookmarkAt(loadBookmarks(), index);
-                saveBookmarks(bookmarks);
+                saveBookmarks(deleteMatchingBookmark(loadBookmarks(), target));
                 displayBookmarks();
             }
         };

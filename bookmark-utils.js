@@ -70,6 +70,13 @@ function findBookmarkIndex(bookmarks, target) {
     return bookmarks.findIndex(bookmark => JSON.stringify(bookmark) === wanted);
 }
 
+// Remove the bookmark that matches `target` by contents. If it is already gone
+// (deleted in another tab, say), the list comes back unchanged.
+function deleteMatchingBookmark(bookmarks, target) {
+    const index = findBookmarkIndex(bookmarks, target);
+    return index === -1 ? bookmarks : deleteBookmarkAt(bookmarks, index);
+}
+
 // Filter a list of bookmarks by title or URL. An empty query returns them all.
 function filterBookmarks(bookmarks, searchQuery) {
     if (!searchQuery || !searchQuery.trim()) {
@@ -130,6 +137,7 @@ if (typeof module !== 'undefined' && module.exports) {
         updateBookmarkAt,
         deleteBookmarkAt,
         findBookmarkIndex,
+        deleteMatchingBookmark,
         filterBookmarks,
         validateBookmarkInput,
         escapeHtml,

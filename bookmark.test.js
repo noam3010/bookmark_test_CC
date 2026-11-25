@@ -18,6 +18,7 @@ const {
   updateBookmarkAt,
   deleteBookmarkAt,
   findBookmarkIndex,
+  deleteMatchingBookmark,
   filterBookmarks,
   validateBookmarkInput,
   escapeHtml,
@@ -190,6 +191,40 @@ describe('Bookmark App - Core Functionality', () => {
       expect(index).toBe(1);
       expect(saved[1].title).toBe('HN');
       expect(saved[0].title).toBe('MDN Web Docs');
+    });
+  });
+
+  describe('Delete the clicked bookmark', () => {
+    test('should remove the bookmark that matches', () => {
+      const result = deleteMatchingBookmark(sample(), sample()[1]);
+
+      expect(result.map((b) => b.title)).toEqual(['GitHub', 'Hacker News']);
+    });
+
+    test('should delete the clicked bookmark after another one was deleted elsewhere', () => {
+      // Hacker News was drawn at index 2. Another tab then deleted GitHub, so
+      // the stored list is shorter. Deleting by position would remove nothing
+      // (index 2 is past the end) or the wrong one; matching by contents is exact.
+      const clicked = sample()[2];
+      const stored = deleteBookmarkAt(sample(), 0);
+
+      const result = deleteMatchingBookmark(stored, clicked);
+
+      expect(result.map((b) => b.title)).toEqual(['MDN Web Docs']);
+    });
+
+    test('should leave the list unchanged when the bookmark is already gone', () => {
+      const gone = { url: 'https://gone.com', title: 'Gone', category: 'other' };
+
+      expect(deleteMatchingBookmark(sample(), gone)).toEqual(sample());
+    });
+
+    test('should not change the list it was given', () => {
+      const original = sample();
+
+      deleteMatchingBookmark(original, original[0]);
+
+      expect(original).toHaveLength(3);
     });
   });
 
